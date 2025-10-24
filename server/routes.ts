@@ -72,14 +72,20 @@ async function fetchDenmarkHolidaysFromOpenHolidays(year: number): Promise<any[]
     const items = Array.isArray(raw) ? raw : raw.items || raw.data || raw.holidays || [];
 
     const extractDate = (obj: any, keys: string[]) => {
+      if (!obj) return null;
       for (const k of keys) {
-        if (!obj) continue;
         const v = obj[k];
-        if (v) return v;
-        // sometimes dates are nested e.g. obj.date?.from
-        if (typeof v === "object" && v !== null && (v.from || v.start)) {
-          return v.from || v.start;
+        if (typeof v === "string" || typeof v === "number") return v;
+        if (v && typeof v === "object") {
+          if (typeof v.from === "string" || typeof v.from === "number") return v.from;
+          if (typeof v.start === "string" || typeof v.start === "number") return v.start;
+          if (typeof v.dateFrom === "string" || typeof v.dateFrom === "number") return v.dateFrom;
         }
+      }
+      // sometimes dates are nested under obj.date: {from:...}
+      if (obj.date && typeof obj.date === "object") {
+        if (obj.date.from) return obj.date.from;
+        if (obj.date.start) return obj.date.start;
       }
       return null;
     };
@@ -241,7 +247,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 }
 
 // Translate German holiday names to more readable format
-function translateHolidayName(name: string): string {
+function translateHolidayName(name?: string): string {
+  if (!name) return "Ferien";
   const translations: Record<string, string> = {
     winterferien: "Winterferien",
     osterferien: "Osterferien",
