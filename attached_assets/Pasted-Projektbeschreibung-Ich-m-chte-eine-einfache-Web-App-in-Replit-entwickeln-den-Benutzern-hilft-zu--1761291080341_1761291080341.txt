@@ -1,0 +1,92 @@
+Projektbeschreibung
+Ich möchte eine einfache Web-App in Replit entwickeln, den Benutzern hilft, zu überprüfen, ob in einem angegebenen Reisezeitraum (Von-Datum bis Bis-Datum in einem bestimmten Jahr) Ferien oder Feiertage in Deutschland oder Dänemark vorliegen. Die App soll speziell für Reisen nach Dänemark außerhalb der Ferienzeiten nützlich sein. Die App sollte auf eine externe Datenquelle (z.B. API, Datenbank oder Repository) zugreifen, um aktuelle Ferien- und Feiertagsdaten abzurufen.
+Funktionale Anforderungen
+
+Benutzereingabe:
+
+Eine Eingabemaske (Formular) mit Feldern für:
+
+Von-Datum (Datumseingabe, Format: DD.MM.YYYY).
+Bis-Datum (Datumseingabe, Format: DD.MM.YYYY).
+Jahr (Dropdown oder Eingabefeld für das Jahr, z.B. aktuelles Jahr bis +5 Jahre).
+
+
+Validierung: Stelle sicher, dass Von-Datum vor Bis-Datum liegt und beide im angegebenen Jahr sind.
+
+
+Überprüfung und Logik:
+
+Prüfe zuerst auf Ferien im angegebenen Zeitraum:
+
+In Deutschland: Für jedes Bundesland (alle 16 Bundesländer prüfen).
+In Dänemark: Für das gesamte Land.
+
+
+Wenn Ferien vorliegen:
+
+Zeige an: Welche Ferien (z.B. "Sommerferien in Bayern"), von wann bis wann (genaue Daten).
+
+
+Wenn keine Ferien vorliegen:
+
+Antworte: "Keine Ferien in diesem Zeitraum."
+
+In Deutschland (bundesweit und bundeslandspezifisch).
+In Dänemark (landesweit).
+
+
+
+
+Ausgabe:
+
+Ergebnisse in einer klaren, lesbaren Ansicht darstellen (z.B. Liste oder Tabelle).
+Für Ferien: Gruppiere nach Land/Bundesland und liste betroffene Ferien mit Start- und Enddatum.
+Keine Ergebnisse: Zeige eine neutrale Nachricht wie "Keine Ferien in diesem Zeitraum."
+
+
+
+
+
+
+
+Technische Anforderungen
+
+Datenquelle:
+
+Greife auf eine Datenquelle zu: www.feiertagskalender.ch
+Um daten für Ferien zu erhalten aus Deutschland und dänemark.
+
+Implementiere HTTP-Anfragen (z.B. mit fetch in JavaScript) zum Abrufen der Daten.
+Cache die Daten, falls möglich, um wiederholte Anfragen zu vermeiden.
+
+
+Technologie-Stack (passend für Replit):
+
+Frontend: HTML, CSS, JavaScript (vanilla oder mit einfachem Framework wie Bootstrap für Responsivität).
+Backend: Node.js (Express.js für Server, falls nötig) oder rein client-seitig, wenn APIs direkt vom Browser abrufbar sind.
+Keine komplexe Datenbank notwendig; externe APIs reichen aus.
+Stelle sicher, dass die App in Replit läuft und deploybar ist (z.B. als Webview).
+
+
+
+Design-Anforderungen
+
+Allgemein: Einfach und ansprechend, nicht überladen. Mobile-freundlich.
+Thema: Passe das Layout an ein Angeln/Fischen-Thema an (mein Chef ist Angelfan):
+
+Farbschema: Blautöne (z.B. #007BFF für Akzente, #E0F7FA für Hintergrund) und Grautöne (z.B. #6C757D für Text).
+Elemente: Füge subtile Icons hinzu, z.B. Fisch- oder Angel-Symbole (aus Font Awesome oder SVG).
+Layout: Eine zentrale Eingabemaske oben, Ergebnisse darunter. Verwende Karten oder Boxen für Ausgaben.
+
+
+
+Entwicklungsschritte
+Bitte strukturiere den Code so, dass er schrittweise aufgebaut ist:
+
+Erstelle die grundlegende HTML-Struktur (Formular und Ergebnisbereich).
+Füge CSS für das Design hinzu (Blau/Grau-Thema).
+Implementiere JavaScript für Eingabe-Validierung und API-Anfragen.
+Integriere die Logik zur Ferien- und Feiertagsprüfung.
+Teste mit Beispiel-Daten (z.B. Zeitraum 01.07.2025 - 31.07.2025).
+
+Generiere den vollständigen Code und erkläre, wie ich ihn in Replit einrichte. Wenn APIs benötigt werden, schlage spezifische vor und integriere sie.
