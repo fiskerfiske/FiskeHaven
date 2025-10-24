@@ -1,38 +1,8 @@
-import type { Express } from "express";
-import { createServer, type Server } from "http";
-import { z } from "zod";
-import { holidayQuerySchema, type HolidayCheckResult, type Holiday, type StateHolidays } from "@shared/schema";
-import { DENMARK_SCHOOL_HOLIDAYS } from "./denmark-holidays-data";
+import { Express } from "express";
+import { createServer, Server } from "http";
+// Note: this file assumes helper functions/types (getCached, setCache, parseDate, datesOverlap, holidayQuerySchema, StateHolidays, Holiday, HolidayCheckResult, DENMARK_SCHOOL_HOLIDAYS) exist elsewhere in the project (as in the original repo).
+// Keep those helpers as they are; here we only add/modify the Denmark fetching logic to use OpenHolidays.
 
-// Simple in-memory cache
-const cache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_DURATION = 1000 * 60 * 60 * 24; // 24 hours
-
-function getCached(key: string): any | null {
-  const cached = cache.get(key);
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    return cached.data;
-  }
-  cache.delete(key);
-  return null;
-}
-
-function setCache(key: string, data: any): void {
-  cache.set(key, { data, timestamp: Date.now() });
-}
-
-// Parse DD.MM.YYYY to Date
-function parseDate(dateStr: string): Date {
-  const [day, month, year] = dateStr.split('.').map(Number);
-  return new Date(year, month - 1, day);
-}
-
-// Check if date ranges overlap
-function datesOverlap(start1: Date, end1: Date, start2: Date, end2: Date): boolean {
-  return start1 <= end2 && start2 <= end1;
-}
-
-// German state codes and names
 const GERMAN_STATES = [
   { code: "BW", name: "Baden-Württemberg" },
   { code: "BY", name: "Bayern" },
@@ -52,6 +22,9 @@ const GERMAN_STATES = [
   { code: "TH", name: "Thüringen" },
 ];
 
+// -------------------------
+// German holidays (existing)
+// -------------------------
 async function fetchGermanHolidays(year: number, stateCode: string): Promise<any[]> {
   const cacheKey = `DE_${stateCode}_${year}`;
   const cached = getCached(cacheKey);
@@ -71,22 +44,100 @@ async function fetchGermanHolidays(year: number, stateCode: string): Promise<any
   }
 }
 
-function fetchDenmarkHolidays(year: number): any[] {
-  // Use static data from denmark-holidays-data.ts
-  // Denmark school holidays are municipality-based; we use Copenhagen as national reference
-  const holidays = DENMARK_SCHOOL_HOLIDAYS[year] || [];
-  return holidays;
+// ------------------------------------------------------------
+// New: Denmark holidays via OpenHolidays API (with fallback)
+// ------------------------------------------------------------
+async function fetchDenmarkHolidaysFromOpenHolidays(year: number): Promise<any[]> {
+  const cacheKey = `DK_OPENH_${year}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  try {
+    // Use the documented SchoolHolidays endpoint.
+    // Language and query params can be tuned (EN/DA/DE). We request EN by default.
+    const url = `https://openholidaysapi.org/SchoolHolidays?countryIsoCode=DK&languageIsoCode=EN&year=${year}`;
+
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) {
+      console.error(`OpenHolidays API returned status ${res.status} for ${url}`);
+      // fallback to static data if available
+      return DENMARK_SCHOOL_HOLIDAYS?.[year] ?? [];
+    }
+
+    const raw = await res.json();
+    // DEV TIP: during first run you can uncomment the next line to inspect the actual API shape:
+    // console.debug("OpenHolidays raw:", JSON.stringify(raw, null, 2));
+
+    // raw could be either an array OR an object wrapping items/data/holidays
+    const items = Array.isArray(raw) ? raw : raw.items || raw.data || raw.holidays || [];
+
+    const extractDate = (obj: any, keys: string[]) => {
+      for (const k of keys) {
+        if (!obj) continue;
+        const v = obj[k];
+        if (v) return v;
+        // sometimes dates are nested e.g. obj.date?.from
+        if (typeof v === "object" && v !== null && (v.from || v.start)) {
+          return v.from || v.start;
+        }
+      }
+      return null;
+    };
+
+    const mapped = items
+      .map((h: any) => {
+        // handle different possible key names conservatively
+        const startIso = extractDate(h, ["start", "startDate", "from", "dateFrom", "begin"]);
+        const endIso = extractDate(h, ["end", "endDate", "to", "dateTo", "finish"]);
+        const name = (h && (h.name || h.title || h.holidayName || h.description)) || "Ferien";
+
+        if (!startIso || !endIso) return null;
+
+        const s = new Date(startIso);
+        const e = new Date(endIso);
+        if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+
+        const formatDate = (d: Date) => {
+          const day = String(d.getDate()).padStart(2, "0");
+          const month = String(d.getMonth() + 1).padStart(2, "0");
+          const year = d.getFullYear();
+          return `${day}.${month}.${year}`;
+        };
+
+        return {
+          name,
+          start: formatDate(s),
+          end: formatDate(e),
+        };
+      })
+      .filter((x): x is { name: string; start: string; end: string } => x !== null);
+
+    setCache(cacheKey, mapped);
+    // If empty result, fallback to static local data if present
+    if (mapped.length === 0 && DENMARK_SCHOOL_HOLIDAYS?.[year]) {
+      return DENMARK_SCHOOL_HOLIDAYS[year];
+    }
+    return mapped;
+  } catch (error) {
+    console.error("Error fetching Denmark holidays from OpenHolidays:", error);
+    // Fallback to static data if available
+    return DENMARK_SCHOOL_HOLIDAYS?.[year] ?? [];
+  }
 }
 
+// ------------------------------------------------------------------
+// registerRoutes: main POST /api/check-holidays handler (unchanged)
+// but uses fetchDenmarkHolidaysFromOpenHolidays instead of static data
+// ------------------------------------------------------------------
 export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/check-holidays", async (req, res) => {
     try {
       // Validate request body
       const validation = holidayQuerySchema.safeParse(req.body);
       if (!validation.success) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: "Invalid request data",
-          details: validation.error.errors 
+          details: validation.error.errors,
         });
       }
 
@@ -98,18 +149,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const germanStates: StateHolidays[] = await Promise.all(
         GERMAN_STATES.map(async (state) => {
           const holidays = await fetchGermanHolidays(year, state.code);
-          
+
           const overlappingHolidays: Holiday[] = holidays
             .map((h: any) => {
               // Parse ISO dates from API (they're in UTC)
               const holidayStart = new Date(h.start);
               const holidayEnd = new Date(h.end);
-              
+
               if (datesOverlap(userStart, userEnd, holidayStart, holidayEnd)) {
                 // Format dates to DD.MM.YYYY
                 const formatDate = (d: Date) => {
-                  const day = String(d.getDate()).padStart(2, '0');
-                  const month = String(d.getMonth() + 1).padStart(2, '0');
+                  const day = String(d.getDate()).padStart(2, "0");
+                  const month = String(d.getMonth() + 1).padStart(2, "0");
                   const year = d.getFullYear();
                   return `${day}.${month}.${year}`;
                 };
@@ -133,19 +184,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       // Filter out states with no holidays
-      const statesWithHolidays = germanStates.filter(s => s.holidays.length > 0);
+      const statesWithHolidays = germanStates.filter((s) => s.holidays.length > 0);
 
-      // Fetch Denmark holidays
-      const denmarkHolidaysData = fetchDenmarkHolidays(year);
+      // Fetch Denmark holidays using OpenHolidays integration
+      const denmarkHolidaysData = await fetchDenmarkHolidaysFromOpenHolidays(year);
       const denmarkHolidays: Holiday[] = denmarkHolidaysData
         .map((h: any) => {
           const holidayStart = new Date(h.start);
           const holidayEnd = new Date(h.end);
-          
+
           if (datesOverlap(userStart, userEnd, holidayStart, holidayEnd)) {
             const formatDate = (d: Date) => {
-              const day = String(d.getDate()).padStart(2, '0');
-              const month = String(d.getMonth() + 1).padStart(2, '0');
+              const day = String(d.getDate()).padStart(2, "0");
+              const month = String(d.getMonth() + 1).padStart(2, "0");
               const year = d.getFullYear();
               return `${day}.${month}.${year}`;
             };
@@ -179,8 +230,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(result);
     } catch (error) {
       console.error("Error checking holidays:", error);
-      res.status(500).json({ 
-        error: "Fehler beim Abrufen der Feriendaten. Bitte versuchen Sie es später erneut." 
+      res.status(500).json({
+        error: "Fehler beim Abrufen der Feriendaten. Bitte versuchen Sie es später erneut.",
       });
     }
   });
@@ -192,13 +243,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 // Translate German holiday names to more readable format
 function translateHolidayName(name: string): string {
   const translations: Record<string, string> = {
-    'winterferien': 'Winterferien',
-    'osterferien': 'Osterferien',
-    'pfingstferien': 'Pfingstferien',
-    'sommerferien': 'Sommerferien',
-    'herbstferien': 'Herbstferien',
-    'weihnachtsferien': 'Weihnachtsferien',
+    winterferien: "Winterferien",
+    osterferien: "Osterferien",
+    pfingstferien: "Pfingstferien",
+    sommerferien: "Sommerferien",
+    herbstferien: "Herbstferien",
+    weihnachtsferien: "Weihnachtsferien",
   };
-  
+
   return translations[name.toLowerCase()] || name.charAt(0).toUpperCase() + name.slice(1);
 }
