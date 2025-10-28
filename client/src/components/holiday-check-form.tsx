@@ -13,13 +13,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -28,7 +21,6 @@ import type { HolidayCheckResult } from "@shared/schema";
 const formSchema = z.object({
   fromDate: z.string().regex(/^\d{2}\.\d{2}\.\d{4}$/, "Format muss DD.MM.YYYY sein"),
   toDate: z.string().regex(/^\d{2}\.\d{2}\.\d{4}$/, "Format muss DD.MM.YYYY sein"),
-  year: z.string(),
 }).refine((data) => {
   const from = parseDate(data.fromDate);
   const to = parseDate(data.toDate);
@@ -39,11 +31,10 @@ const formSchema = z.object({
 }).refine((data) => {
   const from = parseDate(data.fromDate);
   const to = parseDate(data.toDate);
-  const year = parseInt(data.year);
   if (!from || !to) return false;
-  return from.getFullYear() === year && to.getFullYear() === year;
+  return from.getFullYear() === to.getFullYear();
 }, {
-  message: "Beide Daten müssen im ausgewählten Jahr liegen",
+  message: "Beide Daten müssen im selben Jahr liegen",
   path: ["toDate"],
 });
 
@@ -67,15 +58,12 @@ interface HolidayCheckFormProps {
 
 export default function HolidayCheckForm({ onResults, onLoadingChange }: HolidayCheckFormProps) {
   const { toast } = useToast();
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 7 }, (_, i) => currentYear + i);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       fromDate: "",
       toDate: "",
-      year: currentYear.toString(),
     },
   });
 
@@ -101,10 +89,17 @@ export default function HolidayCheckForm({ onResults, onLoadingChange }: Holiday
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     onLoadingChange(true);
+    const from = parseDate(values.fromDate);
+    if (!from) {
+      toast({ title: "Ungültiges Datum", description: "Bitte überprüfe das Von‑Datum.", variant: "destructive" });
+      onLoadingChange(false);
+      return;
+    }
+    const year = from.getFullYear();
     checkHolidaysMutation.mutate({
       fromDate: values.fromDate,
       toDate: values.toDate,
-      year: parseInt(values.year),
+      year,
     });
   };
 
@@ -157,37 +152,6 @@ export default function HolidayCheckForm({ onResults, onLoadingChange }: Holiday
               )}
             />
           </div>
-
-          <FormField
-            control={form.control}
-            name="year"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-sm font-medium">Jahr</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  defaultValue={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger
-                      data-testid="select-year"
-                      className="h-12 text-base"
-                    >
-                      <SelectValue placeholder="Jahr auswählen" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {years.map((year) => (
-                      <SelectItem key={year} value={year.toString()}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
 
           <Button
             type="submit"
