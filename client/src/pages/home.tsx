@@ -40,7 +40,7 @@ export default function Home() {
                   Ferienprüfer
                 </h1>
                 <p className="text-sm md:text-base text-muted-foreground mt-0.5">
-                  Perfekte Angelzeiten planen
+                  Perfekte Urlaubszeit planen
                 </p>
               </div>
             </div>
@@ -59,8 +59,7 @@ export default function Home() {
               <span className="text-sm font-medium">Schulferien Deutschland & Dänemark</span>
             </div>
             <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Überprüfen Sie schnell, ob Ihre geplante Reisezeit mit Schulferien überlappt. 
-              Ideal für Angler, die ruhige Zeiten außerhalb der Ferienperioden suchen.
+              Überprüfen, ob Ihre geplante Reisezeit mit Schulferien überschneidet. 
             </p>
           </div>
 
