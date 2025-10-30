@@ -37,7 +37,7 @@ export default function Home() {
               </div>
               <div>
                 <h1 className="text-2xl md:text-4xl font-heading font-bold text-foreground">
-                  Ferienprüfer
+                  .FiskeHaven
                 </h1>
                 <p className="text-sm md:text-base text-muted-foreground mt-0.5">
                   Perfekte Urlaubszeit planen
